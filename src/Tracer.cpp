@@ -5,6 +5,7 @@
 #include <csignal>
 #include <cstring>
 #include <fmt/core.h>
+#include <stdexcept>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -44,7 +45,7 @@ static std::string format_argument(pid_t pid, const std::string &type, long long
     {
         return read_string_from_process(pid, value);
     }
-    if (value > 65536)
+    if (value > 1000000)
     {
         return fmt::format("{:#x}", value);
     }
@@ -70,7 +71,6 @@ void fork_and_trace(const std::vector<std::string> &args)
         for (auto &arg : args)
             c_args.push_back(const_cast<char *>(arg.c_str()));
         c_args.push_back(nullptr);
-
         ptrace(PTRACE_TRACEME, 0, nullptr, nullptr);
         kill(getpid(), SIGSTOP);
         execvp(c_args[0], c_args.data());
@@ -81,21 +81,18 @@ void fork_and_trace(const std::vector<std::string> &args)
     ptrace(PTRACE_SETOPTIONS, child_pid, nullptr,
            PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK);
     spdlog::info("Tracing process PID={}..", child_pid);
-    Tracer tracer(child_pid);
+    Tracer tracer(child_pid, true); // Explicitly mark this as the forked process
     tracer.run();
 }
 
-Tracer::Tracer(pid_t pid)
+Tracer::Tracer(pid_t pid, bool is_forked_process)
 {
+    if (is_forked_process)
+    {
+        m_initial_fork_pid = pid;
+    }
     m_threads_in_syscall[pid] = false;
     spdlog::info("Attached to PID {}", pid);
-}
-
-Tracer::~Tracer()
-{
-    spdlog::info("Detaching {} processes", m_threads_in_syscall.size());
-    for (auto &[pid, _] : m_threads_in_syscall)
-        ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
 }
 
 void Tracer::run()
@@ -177,8 +174,14 @@ void Tracer::log_syscall_exit(pid_t pid)
     user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, nullptr, &regs);
     const Syscall::SyscallInfo *info = Syscall::get_syscall_info(regs.orig_rax);
-    std::string name = info ? info->name : fmt::format("syscall_{}", regs.orig_rax);
     auto return_val = static_cast<long long>(regs.rax);
+    if (pid == m_initial_fork_pid && info && info->name == "execve" && return_val < 0)
+    {
+        m_initial_fork_pid = -1;
+        throw std::runtime_error{strerror(-return_val)};
+    }
+
+    std::string name = info ? info->name : fmt::format("syscall_{}", regs.orig_rax);
     std::string return_str;
     if (return_val < 0)
     {

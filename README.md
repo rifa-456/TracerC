@@ -1,4 +1,3 @@
-find src include -name "*.cpp" -o -name "*.h" | xargs clang-format -i
 sudo apt install -y libspdlog-dev libcxxopts-dev
 
 rm -rf build && mkdir build && cd build
@@ -21,6 +20,7 @@ mkdir -p /tmp/kernel_files/include/linux
 
 wget -O
 /tmp/kernel_files/arch/x86/entry/syscalls/syscall_64.tbl https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/arch/x86/entry/syscalls/syscall_64.tbl
+
 wget -O
 /tmp/kernel_files/include/linux/syscalls.h https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/include/linux/syscalls.h
 
