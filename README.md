@@ -15,13 +15,15 @@ cd /usr/src/linux-source-6.8.0
 sudo make defconfig
 sudo make prepare
 
-mkdir -p /tmp/kernel_files/arch/x86/entry/syscalls
-mkdir -p /tmp/kernel_files/include/linux
+mkdir -p /home/(USUARIO)/kernel_files/arch/x86/entry/syscalls
+mkdir -p /home/(USUARIO)/kernel_files/include/linux
 
 wget -O
-/tmp/kernel_files/arch/x86/entry/syscalls/syscall_64.tbl https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/arch/x86/entry/syscalls/syscall_64.tbl
+/home/(USUARIO)
+/kernel_files/arch/x86/entry/syscalls/syscall_64.tbl https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/arch/x86/entry/syscalls/syscall_64.tbl
 
 wget -O
-/tmp/kernel_files/include/linux/syscalls.h https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/include/linux/syscalls.h
+/home/(USUARIO)
+/kernel_files/include/linux/syscalls.h https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/include/linux/syscalls.h
 
 kernel_source_path = "/tmp/kernel_files"

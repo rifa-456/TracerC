@@ -95,8 +95,6 @@ int main(int argc, char *argv[])
                    PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE); // Configura o ptrace para receber
                                                                  // eventos de sistema e clone
             ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr); // Inicia o tracing do processo PID até a
-                                                           // proxíma entrada ou saida de Syscall
-            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
             Tracer tracer(pid, false);
             tracer.run();
         }
@@ -106,12 +104,7 @@ int main(int argc, char *argv[])
             fork_and_trace(fork_args);
         }
     }
-    catch (const cxxopts::exceptions::exception &e) // Tratar erro da lib cxxopts
-    {
-        spdlog::error("Erro ao ler argumentos: {}", e.what());
-        return 1;
-    }
-    catch (const std::exception &e) // Tratar erro genérico do Tracer
+    catch (const std::exception &e)
     {
         spdlog::error("Um erro desconhecido ocorreu: {}", e.what());
         return 1;
