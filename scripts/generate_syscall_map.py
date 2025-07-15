@@ -1,9 +1,14 @@
 import os
 import re
-import sys
+from pathlib import Path
 
-PROJECT_ROOT = os.getcwd()
-OUTPUT_FILE = os.path.join(PROJECT_ROOT, "src", "SyscallMap.cpp")
+SCRIPT_PATH = Path(__file__).resolve()
+PROJECT_ROOT = SCRIPT_PATH.parent.parent
+HOME_PATH = Path.home()
+KERNEL_SOURCE_PATH = HOME_PATH / "kernel_files"
+OUTPUT_FILE = PROJECT_ROOT / "src" / "SyscallMap.cpp"
+KERNEL_SOURCE_PATH = str(KERNEL_SOURCE_PATH)
+OUTPUT_FILE = str(OUTPUT_FILE)
 
 
 def parse_syscall_table(kernel_path):
@@ -153,7 +158,7 @@ def generate_cpp_file(final_syscall_data):
 
 
 if __name__ == "__main__":
-    kernel_source_path = "/tmp/kernel_files"
+    kernel_source_path = KERNEL_SOURCE_PATH
     syscall_table = parse_syscall_table(kernel_source_path)
     signatures = parse_syscall_signatures(kernel_source_path)
     final_data = {}
