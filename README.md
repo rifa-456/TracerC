@@ -2,18 +2,6 @@ sudo apt install -y libspdlog-dev libcxxopts-dev
 
 rm -rf build && mkdir build && cd build
 cmake ..
-make -j$(nproc)
-
-sudo apt update
-sudo apt install linux-source
-sudo apt-get install libclang-dev
-
-cd /usr/src
-sudo tar xjf linux-source-*.tar.bz2
-
-cd /usr/src/linux-source-6.8.0
-sudo make defconfig
-sudo make prepare
 
 mkdir -p /home/(USUARIO)/kernel_files/arch/x86/entry/syscalls
 mkdir -p /home/(USUARIO)/kernel_files/include/linux
@@ -27,3 +15,9 @@ wget -O
 /kernel_files/include/linux/syscalls.h https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/include/linux/syscalls.h
 
 kernel_source_path = "/tmp/kernel_files"
+
+./TracerC -f python3 (PROEJCT ROOT PATH FROM /HOME)/scripts/dummy.py
+./TracerC -f python3 /home/yordle/CLionProjects/TracerC/scripts/dummy.py
+
+cd build
+sudo ./TracerC -a (PID)

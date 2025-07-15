@@ -15,20 +15,7 @@
 #include <sys/wait.h>
 #include <vector>
 
-/**
- * @brief Inicializa e configura o logger global da aplicação.
- *
- * Esta função configura um logger com dois destinos (sinks): um para o console
- * e outro para um arquivo de log. O sink do console registrará mensagens a
- * partir do nível 'info'.
- *
- * O arquivo de log é nomeado dinamicamente com a data e hora de início da
- * aplicação no formato "trace-DD-MM-YYYY:HH-MM-SS.log" e registrará todas as
- * mensagens a partir do nível 'trace'.
- *
- * @note O arquivo de log será criado no diretório "logs/".
- * @throws spdlog::spdlog_ex em caso de falha na inicialização do logger.
- */
+// No changes needed in setup_logger()
 void setup_logger()
 {
     try
@@ -65,9 +52,7 @@ int main(int argc, char *argv[])
                              "Um tracer de chamadas de sistema escrito em C++ usando ptrace");
     options.add_options()("a,attach", "PID para fazer o tracing", cxxopts::value<pid_t>())(
         "f,fork", "Endereço do arquivo para ser forkeado e depois fazer o traceado",
-        cxxopts::value<std::vector<std::string>>())(
-        "h,help", "Imprimir ajuda"); // O valor de fork é um vetor de strings para ser possível
-                                     // passar argumentos para o programa que será forkeado
+        cxxopts::value<std::vector<std::string>>())("h,help", "Imprimir ajuda");
     options.parse_positional({"fork"});
     options.positional_help("<program> [args...]");
     try
@@ -75,26 +60,27 @@ int main(int argc, char *argv[])
         auto result = options.parse(argc, argv);
         if (result.count("help") || argc == 1)
         {
-            std::cout
-                << options.help()
-                << std::endl; // Imprimir ajuda se o usuário passar a flag help ou nenhum argumento
+            std::cout << options.help() << std::endl;
             return 0;
         }
         if (result.count("attach"))
         {
             pid_t pid = result["attach"].as<pid_t>();
             spdlog::info("Tentando fazer tracing no programa com PID: {}", pid);
-            if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == -1) // Tenta anexar ao processo
+            if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == -1)
             {
                 spdlog::critical("Falha ao escutar o programa com PID {}: {}", pid,
                                  strerror(errno));
                 return 1;
             }
-            waitpid(pid, nullptr, 0); // Espera o processo ser anexado
+            waitpid(pid, nullptr, 0); // Wait for the attach to complete
+
+            // **FIX**: Use the same comprehensive set of options as the fork case.
             ptrace(PTRACE_SETOPTIONS, pid, nullptr,
-                   PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE); // Configura o ptrace para receber
-                                                                 // eventos de sistema e clone
-            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr); // Inicia o tracing do processo PID até a
+                   PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK |
+                       PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL);
+
+            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
             Tracer tracer(pid, false);
             tracer.run();
         }
