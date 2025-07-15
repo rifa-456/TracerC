@@ -3,16 +3,14 @@ sudo apt install -y libspdlog-dev libcxxopts-dev
 rm -rf build && mkdir build && cd build
 cmake ..
 
-mkdir -p /home/(USUARIO)/kernel_files/arch/x86/entry/syscalls
-mkdir -p /home/(USUARIO)/kernel_files/include/linux
+mkdir -p ~/kernel_files/arch/x86/entry/syscalls
+mkdir -p ~/kernel_files/include/linux
 
-wget -O
-/home/(USUARIO)
-/kernel_files/arch/x86/entry/syscalls/syscall_64.tbl https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/arch/x86/entry/syscalls/syscall_64.tbl
+wget -O ~
+/kernel_files/arch/x86/entry/syscalls/syscall_64.tbl https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/arch/x86/entry/syscalls/syscall_64.tbl
 
-wget -O
-/home/(USUARIO)
-/kernel_files/include/linux/syscalls.h https://raw.githubusercontent.com/microsoft/WSL2-Linux-Kernel/linux-msft-wsl-5.15.153.1/include/linux/syscalls.h
+wget -O ~
+/kernel_files/include/linux/syscalls.h https://raw.githubusercontent.com/torvalds/linux/refs/heads/master/include/linux/syscalls.h
 
 kernel_source_path = "/tmp/kernel_files"
 

@@ -22,36 +22,33 @@ def parse_syscall_table(kernel_path):
               dicionários contendo o número e o ponto de entrada da syscall.
     """
     syscall_table_path = os.path.join(kernel_path,
-                                      "arch/x86/entry/syscalls/syscall_64.tbl")  # Caminho da tabela de syscalls do linux
-    # Exemplo do arquivo syscall_64.tbl:
-    # ...
-    # 0	common	read			sys_read
-    # 1	common	write			sys_write
-    # ...
+                                      "arch/x86/entry/syscalls/syscall_64.tbl")
     syscalls = {}
+
     pattern = re.compile(
-        r"^\d+\s+\w+\s+([a-zA-Z0-9_]+)\s+([a-zA-Z0-9_]+)")  # Regex que pegas os nomes e pontos de entrada das syscalls do arquivo syscall_64.tbl
-    #
-    # ^: Faz com que o regex só analise linhas novas
-    # \d+: Procura por um ou mais números, o número da syscall
-    # \s+: Procura por um ou mais espaços, o primeiro espaço
-    # \w+: Procura por uma palavra (letras, números ou underscore), no exemplo "common"
-    # \s+: Procura por mais um ou mais espaços, o segundo espaço
-    # ([a-zA-Z0-9_]+): Captura o nome da syscall, que pode conter letras, números ou underscore
-    # \s+: Procura por mais um ou mais espaços, o terceiro espaço
-    # ([a-zA-Z0-9_]+): Captura o ponto de entrada da syscall, que também pode conter letras, números ou underscore
+        r"^\d+\s+(\w+)\s+([a-zA-Z0-9_]+)\s+([a-zA-Z0-9_]+)")
+
     with open(syscall_table_path, "r") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):  # Ignora linhas vazias ou comentários no .tbl
+            if not line or line.startswith('#'):
                 continue
-            m = pattern.match(line)  # Verifica se a linha sendo analisada bate com o regex
+            m = pattern.match(line)
             if m:
-                num = int(line.split()[0])  # Pega o número da syscall, que é o primeiro elemento da linha
-                name = m.group(1)  # Pega o nome da syscall, que é o primeiro grupo do regex
-                entry_point = m.group(2)  # Pega o ponto de entrada da syscall, que é o segundo grupo do regex
-                syscalls[name] = {"number": num,
-                                  "entry_point": entry_point}  # Adiciona o nome, número e ponto de entrada da syscall no dicionário syscalls
+                abi = m.group(1)
+                if abi == 'x32':
+                    continue
+
+                num = int(line.split()[0])
+
+                # --- CHANGE 3: Adjust group indices ---
+                # Since we added a capture group, name is now group 2 and entry_point is group 3
+                name = m.group(2)
+                entry_point = m.group(3)
+
+                # This prevents overwriting a common/64 syscall with a duplicate name
+                if name not in syscalls:
+                    syscalls[name] = {"number": num, "entry_point": entry_point}
     return syscalls
 
 
@@ -66,65 +63,27 @@ def parse_syscall_signatures(kernel_path):
               valores são dicionários contendo a contagem ('arg_count') e os tipos
               ('arg_types') dos argumentos da respectiva syscall.
     """
-    signatures_header_path = os.path.join(kernel_path,
-                                          "include/linux/syscalls.h")  # Caminho do arquivo de assinaturas de syscalls
-    # Exemplo do arquivo syscalls.h:
-    # ...
-    # ...
-    # /*
-    # * These syscall function prototypes are kept in the same order as
-    # * include/uapi/asm-generic/unistd.h. Architecture specific entries go below,
-    # * followed by deprecated or obsolete system calls.
-    # *
-    # * Please note that these prototypes here are only provided for information
-    #     * purposes, for static analysis, and for linking from the syscall table.
-    # * These functions should not be called elsewhere from kernel code.
-    # *
-    # * As the syscall calling convention may be different from the default
-    # * for architectures overriding the syscall calling convention, do not
-    # * include the prototypes if CONFIG_ARCH_HAS_SYSCALL_WRAPPER is enabled.
-    # */
-    # #ifndef CONFIG_ARCH_HAS_SYSCALL_WRAPPER
-    # asmlinkage long sys_io_setup(unsigned nr_reqs, aio_context_t __user *ctx);
-    # asmlinkage long sys_io_destroy(aio_context_t ctx);
-    # ...
-    # ...
+    signatures_header_path = os.path.join(kernel_path, "include/linux/syscalls.h")
     signatures = {}
-    pattern = re.compile(
-        r"asmlinkage\s+long\s+([a-zA-Z0-9_]+)\s*\((.*?)\);")  # Regex que captura os protótipos de funções de syscalls.
-    #
-    # asmlinkage: Procura pela palavra "asmlinkage"
-    # \s+: Procura por um ou mais espaços.
-    # long: Procura pela palavra "long", que é o tipo de retorno do protótipo.
-    # \s+: Procura por mais um ou mais espaços.
-    # ([a-zA-Z0-9_]+): Captura o nome da função (o ponto de entrada da syscall), que pode conter letras, números ou underscore.
-    # \s*: Procura por zero ou mais espaços.
-    # \(: Procura pelo caractere "(".
-    # (.*?): Captura (de forma não gulosa) qualquer caractere, os argumentos e tipos do protótipo.
-    # \): Procura pelo caractere ")".
-    # ;: Procura pelo caractere ";".
+    pattern = re.compile(r"asmlinkage\s+long\s+([a-zA-Z0-9_]+)\s*\((.*?)\);", re.DOTALL)
     with open(signatures_header_path, "r") as f:
-        content = f.read().replace('\n', ' ')  # Lê o conteúdo do arquivo e substitui quebras de linha por espaços
-        matches = pattern.finditer(content)  # Encontra todas as correspondências do regex no conteúdo do arquivo
-        for m in matches:  # Itera sobre todas as correspondências encontradas,
-            # é preciso fazer deste jeito por conta que o arquivo syscalls.h contem muitos outras coisas além dos protótipos,
-            # no entanto, os protótipos sempre começam com "asmlinkage" que é o que utilizamos para identificar os protótipos de syscalls
-            entry_point = m.group(1)  # Pega o ponto de entrada da syscall, que é o primeiro grupo do regex
-            arg_string = m.group(2).strip()  # Pega os argumentos da syscall, que é o segundo grupo do regex
+        content = f.read()
+        matches = pattern.finditer(content)
+        for m in matches:
+            entry_point = m.group(1)
+            arg_string = m.group(2).replace('\n', ' ').strip()
             arg_types = []
             if arg_string == "void" or not arg_string:
                 arg_count = 0
             else:
-                args = arg_string.split(',')  # Divide a string de argumentos em uma lista, separando por vírgulas
+                args = arg_string.split(',')
                 arg_count = len(args)
                 for arg in args:
-                    arg_with_spaces = arg.strip().replace('*',
-                                                          ' * ')  # Necessário para facilitar para o Tracer reconhecer ponteiros
-                    parts = arg_with_spaces.split()  # Divide o argumento em partes, separando por espaços
+                    arg_with_spaces = arg.strip().replace('*', ' * ')
+                    parts = arg_with_spaces.split()
                     if len(parts) > 1:
-                        arg_types.append(" ".join(
-                            parts[:-1]))  # Pega o tipo do argumento, que é tudo menos o último elemento da lista
-                    else:
+                        arg_types.append(" ".join(parts[:-1]))
+                    elif parts:
                         arg_types.append(parts[0])
             signatures[entry_point] = {"arg_count": arg_count, "arg_types": arg_types}
     return signatures

@@ -15,46 +15,46 @@
 #include <sys/wait.h>
 #include <vector>
 
-// No changes needed in setup_logger()
 void setup_logger()
 {
     try
     {
         auto now = std::chrono::system_clock::now();
-        auto na_time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream ss_date_hour;
+        auto tt = std::chrono::system_clock::to_time_t(now);
         tm tm_local{};
-        localtime_r(&na_time_t, &tm_local);
-        ss_date_hour << std::put_time(&tm_local, "%d-%m-%Y:%H-%M-%S");
-        std::stringstream ss_file_name;
-        ss_file_name << "logs/trace-" << ss_date_hour.str() << ".log";
-        auto file_sink =
-            std::make_shared<spdlog::sinks::basic_file_sink_mt>(ss_file_name.str(), true);
-        file_sink->set_level(spdlog::level::trace);
+        localtime_r(&tt, &tm_local);
+        std::stringstream ss;
+        ss << std::put_time(&tm_local, "%d-%m-%Y:%H-%M-%S");
+        std::string fname = "logs/trace-" + ss.str() + ".log";
+
+        auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(fname, true);
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        file_sink->set_level(spdlog::level::trace);
         console_sink->set_level(spdlog::level::info);
-        spdlog::sinks_init_list sink_list = {console_sink, file_sink};
-        auto logger = std::make_shared<spdlog::logger>("tracer", sink_list);
-        logger->set_level(spdlog::level::trace);
-        spdlog::set_default_logger(logger);
+
+        spdlog::logger logger("tracer", {console_sink, file_sink});
+        logger.set_level(spdlog::level::trace);
+        spdlog::set_default_logger(std::make_shared<spdlog::logger>(logger));
         spdlog::flush_on(spdlog::level::info);
     }
     catch (const spdlog::spdlog_ex &ex)
     {
-        std::cerr << "Inicialização de Log falhou: " << ex.what() << std::endl;
+        std::cerr << "Log init failed: " << ex.what() << std::endl;
     }
 }
 
 int main(int argc, char *argv[])
 {
     setup_logger();
-    cxxopts::Options options("trace",
-                             "Um tracer de chamadas de sistema escrito em C++ usando ptrace");
-    options.add_options()("a,attach", "PID para fazer o tracing", cxxopts::value<pid_t>())(
-        "f,fork", "Endereço do arquivo para ser forkeado e depois fazer o traceado",
-        cxxopts::value<std::vector<std::string>>())("h,help", "Imprimir ajuda");
+    spdlog::info("[main] starting, argc={}", argc);
+
+    cxxopts::Options options("TracerC", "C++ ptrace-based syscall tracer");
+    options.add_options()("a,attach", "PID to attach to", cxxopts::value<pid_t>())(
+        "f,fork", "Program to fork+trace",
+        cxxopts::value<std::vector<std::string>>())("h,help", "Print help");
     options.parse_positional({"fork"});
     options.positional_help("<program> [args...]");
+
     try
     {
         auto result = options.parse(argc, argv);
@@ -63,19 +63,19 @@ int main(int argc, char *argv[])
             std::cout << options.help() << std::endl;
             return 0;
         }
+
         if (result.count("attach"))
         {
             pid_t pid = result["attach"].as<pid_t>();
-            spdlog::info("Tentando fazer tracing no programa com PID: {}", pid);
+            spdlog::info("[main] attaching to PID {}", pid);
             if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == -1)
             {
-                spdlog::critical("Falha ao escutar o programa com PID {}: {}", pid,
-                                 strerror(errno));
+                spdlog::critical("ptrace attach {} failed: {}", pid, strerror(errno));
                 return 1;
             }
-            waitpid(pid, nullptr, 0); // Wait for the attach to complete
+            waitpid(pid, nullptr, 0);
 
-            // **FIX**: Use the same comprehensive set of options as the fork case.
+            spdlog::info("[main] setting PTRACE options on pid {}", pid);
             ptrace(PTRACE_SETOPTIONS, pid, nullptr,
                    PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK |
                        PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL);
@@ -86,16 +86,21 @@ int main(int argc, char *argv[])
         }
         else if (result.count("fork"))
         {
-            const auto &fork_args = result["fork"].as<std::vector<std::string>>();
-            fork_and_trace(fork_args);
+            auto args = result["fork"].as<std::vector<std::string>>();
+            fork_and_trace(args);
+        }
+        else
+        {
+            spdlog::error("[main] no valid mode selected");
         }
     }
     catch (const std::exception &e)
     {
-        spdlog::error("Um erro desconhecido ocorreu: {}", e.what());
+        spdlog::error("[main] unhandled exception: {}", e.what());
         return 1;
     }
-    spdlog::info("Tracing finalizado.");
+
+    spdlog::info("[main] done");
     spdlog::shutdown();
     return 0;
 }
