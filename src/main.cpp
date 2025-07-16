@@ -4,8 +4,12 @@
 #include <cstring>
 #include <ctime>
 #include <cxxopts.hpp>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <queue>
+#include <set>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
@@ -43,6 +47,39 @@ void setup_logger()
     }
 }
 
+std::vector<pid_t> find_all_descendants(pid_t root_pid)
+{
+    std::set<pid_t> pids;
+    std::queue<pid_t> q;
+    q.push(root_pid);
+    while (!q.empty())
+    {
+        pid_t current_pid = q.front();
+        q.pop();
+        std::string task_path = "/proc/" + std::to_string(current_pid) + "/task";
+        if (!std::filesystem::exists(task_path))
+        {
+            continue;
+        }
+        for (const auto &entry : std::filesystem::directory_iterator(task_path))
+        {
+            pid_t tid = std::stoi(entry.path().filename().string());
+            pids.insert(tid);
+            std::string children_path = entry.path().string() + "/children";
+            std::ifstream children_file(children_path);
+            pid_t child_pid;
+            while (children_file >> child_pid)
+            {
+                if (pids.find(child_pid) == pids.end())
+                {
+                    q.push(child_pid);
+                }
+            }
+        }
+    }
+    return std::vector<pid_t>(pids.begin(), pids.end());
+}
+
 int main(int argc, char *argv[])
 {
     setup_logger();
@@ -63,25 +100,31 @@ int main(int argc, char *argv[])
             std::cout << options.help() << std::endl;
             return 0;
         }
-
         if (result.count("attach"))
         {
-            pid_t pid = result["attach"].as<pid_t>();
-            spdlog::info("[main] attaching to PID {}", pid);
-            if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == -1)
+            pid_t root_pid = result["attach"].as<pid_t>();
+            spdlog::info("[main] finding all descendants for root PID {}", root_pid);
+            std::vector<pid_t> pids_to_trace = find_all_descendants(root_pid);
+            spdlog::info("[main] found {} processes in tree to attach to.", pids_to_trace.size());
+            for (pid_t pid : pids_to_trace)
             {
-                spdlog::critical("ptrace attach {} failed: {}", pid, strerror(errno));
-                return 1;
+                spdlog::info("[main] attaching to PID {}", pid);
+                if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == -1)
+                {
+                    spdlog::warn("ptrace attach {} failed: {}", pid, strerror(errno));
+                    continue;
+                }
+                waitpid(pid, nullptr, 0);
+                spdlog::info("[main] setting PTRACE options on pid {}", pid);
+                ptrace(PTRACE_SETOPTIONS, pid, nullptr,
+                       PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK |
+                           PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL);
             }
-            waitpid(pid, nullptr, 0);
-
-            spdlog::info("[main] setting PTRACE options on pid {}", pid);
-            ptrace(PTRACE_SETOPTIONS, pid, nullptr,
-                   PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK |
-                       PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL);
-
-            ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
-            Tracer tracer(pid, false);
+            Tracer tracer(pids_to_trace);
+            for (pid_t pid : pids_to_trace)
+            {
+                ptrace(PTRACE_SYSCALL, pid, nullptr, nullptr);
+            }
             tracer.run();
         }
         else if (result.count("fork"))

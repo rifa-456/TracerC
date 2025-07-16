@@ -8,7 +8,7 @@
 class Tracer
 {
   public:
-    explicit Tracer(pid_t pid, bool is_forked_process = false);
+    Tracer(const std::vector<pid_t> &pids);
     void run();
 
   private:

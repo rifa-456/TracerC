@@ -99,20 +99,21 @@ void fork_and_trace(const std::vector<std::string> &args)
                PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL);
     ptrace(PTRACE_SYSCALL, child, nullptr, nullptr);
     spdlog::info("Tracing process PID={}", child);
-
-    Tracer tracer(child, true);
+    std::vector<pid_t> pids_to_trace = {child};
+    Tracer tracer(pids_to_trace);
     tracer.run();
 }
 
-Tracer::Tracer(pid_t pid, bool is_forked)
+Tracer::Tracer(const std::vector<pid_t> &pids)
 {
     signal(SIGSEGV, segv_handler);
-    spdlog::info("[Tracer ctor] pid={} forked={}", pid, is_forked);
-    if (is_forked)
-        m_initial_fork_pid = pid;
-    m_threads_in_syscall[pid] = false;
-    m_just_execed[pid] = false;
-    spdlog::info("Attached to PID {}", pid);
+    spdlog::info("[Tracer ctor] preparing to trace {} processes", pids.size());
+    for (pid_t pid : pids)
+    {
+        m_threads_in_syscall[pid] = false;
+        m_just_execed[pid] = false;
+        spdlog::info("Tracking PID {}", pid);
+    }
 }
 
 void Tracer::run()
