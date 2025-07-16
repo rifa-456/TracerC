@@ -141,7 +141,6 @@ Tracer::Tracer(const std::vector<pid_t> &pids)
  */
 void Tracer::run()
 {
-    spdlog::info("[run] entrando no loop principal");
     // O loop continua enquanto houver threads sendo rastreadas.
     while (!m_threads_in_syscall.empty())
     {
@@ -290,6 +289,7 @@ void Tracer::log_syscall_entry(pid_t pid)
                 args_str += fmt::format("{:#x}", vals[i]);
             }
         }
+        spdlog::info("SYSCALL_ENTRY [PID:{}] {}({})", pid, info->name, args_str);
     }
     else
     {
