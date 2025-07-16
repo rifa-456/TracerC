@@ -1,21 +1,33 @@
-#include "Tracer.h"
-#include <cxxopts.hpp>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <queue>
-#include <set>
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/spdlog.h>
-#include <sys/ptrace.h>
-#include <sys/wait.h>
-#include <vector>
+#include "Tracer.h" // Header do projeto
+
+#include <cxxopts.hpp> // Usado para analisar os argumentos da linha de comando.
+
+#include <filesystem> // Usado para interagir com o sistema de arquivos, especificamente para navegar em /proc.
+
+#include <fstream> // Usado para ler arquivos, como o arquivo 'children' em /proc/[pid]/task/[tid]/.
+
+#include <iostream> // Usado para imprimir a mensagem de ajuda na saída padrão (std::cout).
+
+#include <queue> // Usado pela função "find_all_related" para realizar uma busca em largura na árvore de processos.
+
+#include <set> // Usado para armazenar PIDs únicos e evitar o reprocessamento na busca de processos.
+
+#include <spdlog/sinks/basic_file_sink.h> // Usado para criar um sink do spdlog que redireciona a saída para um arquivo.
+
+#include <spdlog/sinks/stdout_color_sinks.h> // Usado para criar um sink do spdlog que redireciona a saída colorida para o console.
+
+#include <spdlog/spdlog.h> // Usado para a funcionalidade principal de logging com a biblioteca spdlog.
+
+#include <sys/ptrace.h> // Usado pela chamada de sistema ptrace para anexar e controlar outros processos.
+
+#include <sys/wait.h> // Usado pela função waitpid para aguardar por mudanças de estado nos processos filhos.
+
+#include <vector> // Usado para armazenar a lista de argumentos do programa e os PIDs a serem rastreados.
 
 /**
- * @brief Configures the global spdlog logger for file and console output.
- * * Initializes a logger that writes `info` level (and above) logs to the console
- * and `trace` level (and above) logs to a timestamped file in the `logs/` directory.
+ * @brief Configura o logger global spdlog para saída em arquivo e no console.
+ * @details Inicializa um logger que escreve logs de nível `info` (e superiores) no console
+ * e logs de nível "trace" (e superiores) em um arquivo com data e hora no diretório `logs/`.
  */
 void setup_logger()
 {
@@ -45,9 +57,9 @@ void setup_logger()
 }
 
 /**
- * @brief Finds all descendant processes and threads of a given root PID.
- * @param root_pid The process ID to start the search from.
- * @return A vector containing all related PIDs and TIDs.
+ * @brief Encontra todos os processos e threads descendentes de um determinado PID raiz.
+ * @param root_pid O ID do processo a partir do qual a busca deve ser iniciada.
+ * @return Um vetor contendo todos os PIDs e TIDs relacionados.
  */
 std::vector<pid_t> find_all_related(pid_t root_pid)
 {
